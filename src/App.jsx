@@ -1,0 +1,42 @@
+import { useState } from 'react';
+import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
+import Dashboard from './pages/Dashboard';
+import Projects from './pages/Projects';
+import DSA from './pages/DSA';
+import {
+  DocumentsPage,
+  MailPage,
+  ClientsPage,
+  ReadingPage,
+  PortfolioPage,
+  AssistantPage,
+  AutomationPage,
+} from './pages/PlaceholderPages';
+
+const pageMap = {
+  dashboard: <Dashboard />,
+  projects: <Projects />,
+  dsa: <DSA />,
+  documents: <DocumentsPage />,
+  mail: <MailPage />,
+  clients: <ClientsPage />,
+  reading: <ReadingPage />,
+  portfolio: <PortfolioPage />,
+  assistant: <AssistantPage />,
+  automation: <AutomationPage />,
+};
+
+export default function App() {
+  const [activePage, setActivePage] = useState('dashboard');
+
+  return (
+    <div className="app-shell">
+      <Sidebar activePage={activePage} setActivePage={setActivePage} />
+      <div className="main-content">
+        <Topbar activePage={activePage} />
+        {pageMap[activePage]}
+      </div>
+    </div>
+  );
+}
