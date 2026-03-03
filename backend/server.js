@@ -16,6 +16,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Routes ───────────────────────────────
 app.use('/api/projects', require('./routes/projects'));
+app.use('/api/dsa', require('./dsa/dsa.routes'));
+app.use('/api/vault', require('./vault/vault.routes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -34,7 +36,9 @@ app.get('/', (req, res) => {
         message: 'Welcome to Jarvis Backend API',
         endpoints: {
             health: '/api/health',
-            projects: '/api/projects'
+            projects: '/api/projects',
+            dsa: '/api/dsa',
+            vault: '/api/vault',
         }
     });
 });

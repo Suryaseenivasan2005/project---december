@@ -4,8 +4,8 @@ import Topbar from './components/Topbar';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import DSA from './pages/DSA';
+import DocumentVault from './pages/DocumentVault';
 import {
-  DocumentsPage,
   MailPage,
   ClientsPage,
   ReadingPage,
@@ -18,7 +18,7 @@ const pageMap = {
   dashboard: <Dashboard />,
   projects: <Projects />,
   dsa: <DSA />,
-  documents: <DocumentsPage />,
+  documents: <DocumentVault />,
   mail: <MailPage />,
   clients: <ClientsPage />,
   reading: <ReadingPage />,
