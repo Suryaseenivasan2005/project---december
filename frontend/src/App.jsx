@@ -5,10 +5,10 @@ import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import DSA from './pages/DSA';
 import DocumentVault from './pages/DocumentVault';
+import Reading from './pages/Reading';
 import {
   MailPage,
   ClientsPage,
-  ReadingPage,
   PortfolioPage,
   AssistantPage,
   AutomationPage,
@@ -21,7 +21,7 @@ const pageMap = {
   documents: <DocumentVault />,
   mail: <MailPage />,
   clients: <ClientsPage />,
-  reading: <ReadingPage />,
+  reading: <Reading />,
   portfolio: <PortfolioPage />,
   assistant: <AssistantPage />,
   automation: <AutomationPage />,

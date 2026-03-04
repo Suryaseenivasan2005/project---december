@@ -18,6 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/dsa', require('./dsa/dsa.routes'));
 app.use('/api/vault', require('./vault/vault.routes'));
+app.use('/api/reading', require('./reading/reading.routes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -39,6 +40,7 @@ app.get('/', (req, res) => {
             projects: '/api/projects',
             dsa: '/api/dsa',
             vault: '/api/vault',
+            reading: '/api/reading',
         }
     });
 });
