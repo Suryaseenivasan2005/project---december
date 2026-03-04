@@ -149,7 +149,7 @@ const accessSharedFile = async (req, res) => {
             'Content-Disposition',
             `inline; filename="${encodeURIComponent(result.fileName)}"`
         );
-        res.sendFile(result.filePath, { root: '/' });
+        res.sendFile(result.filePath);
     } catch (err) {
         console.error('❌ accessSharedFile error:', err.message);
         return res.status(500).json({ success: false, message: 'Server error while serving shared file.' });
@@ -175,7 +175,7 @@ const viewFileContent = async (req, res) => {
             'Content-Disposition',
             `inline; filename="${encodeURIComponent(result.fileName)}"`
         );
-        res.sendFile(result.filePath, { root: '/' });
+        res.sendFile(result.filePath);
     } catch (err) {
         console.error('❌ viewFileContent error:', err.message);
         return res.status(500).json({ success: false, message: 'Server error while opening file.' });
