@@ -6,10 +6,10 @@ import Projects from './pages/Projects';
 import DSA from './pages/DSA';
 import DocumentVault from './pages/DocumentVault';
 import Reading from './pages/Reading';
+import Portfolio from './pages/Portfolio';
 import {
   MailPage,
   ClientsPage,
-  PortfolioPage,
   AssistantPage,
   AutomationPage,
 } from './pages/PlaceholderPages';
@@ -22,7 +22,7 @@ const pageMap = {
   mail: <MailPage />,
   clients: <ClientsPage />,
   reading: <Reading />,
-  portfolio: <PortfolioPage />,
+  portfolio: <Portfolio />,
   assistant: <AssistantPage />,
   automation: <AutomationPage />,
 };
