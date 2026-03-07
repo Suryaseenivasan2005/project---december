@@ -20,6 +20,8 @@ app.use('/api/dsa', require('./dsa/dsa.routes'));
 app.use('/api/vault', require('./vault/vault.routes'));
 app.use('/api/reading', require('./reading/reading.routes'));
 app.use('/api/portfolio', require('./portfolio/portfolio.routes'));
+app.use('/api/stocks', require('./routes/stocks'));
+app.use('/api/news', require('./routes/news'));
 
 // Health check
 app.get('/api/health', (req, res) => {

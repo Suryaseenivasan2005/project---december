@@ -10,6 +10,11 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      '/stock': {
+        target: 'https://military-jobye-haiqstudios-14f59639.koyeb.app',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

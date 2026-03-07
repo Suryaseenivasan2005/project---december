@@ -1,4 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { fetchPortfolioLivePrices, fetchPortfolioNews, fetchUserPortfolio } from '../services/portfolioService';
+import PortfolioTable from '../components/PortfolioTable';
+import NewsTab from '../components/NewsTab';
 import {
     PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -19,6 +22,9 @@ const RAW_STOCKS = [
     { symbol: 'TMCV', name: 'Tata Motor CV ETF', qty: 5, buyPrice: 211.30, currentPrice: 474.25, sector: 'Auto' },
     { symbol: 'TMPV', name: 'Tata Motor PV ETF', qty: 5, buyPrice: 467.03, currentPrice: 350.75, sector: 'Auto' },
 ];
+
+// Symbols list used for live price & news API calls
+const PORTFOLIO_SYMBOLS = RAW_STOCKS.map(s => s.symbol);
 
 const RAW_MF = [
     {
@@ -208,9 +214,16 @@ function PortfolioSummaryCard({ onAnalyze, mode }) {
 
 // ─── StockHoldingCard ─────────────────────────────────────────────────────────
 
-function StockHoldingCard({ stock }) {
-    const isProfit = stock.profitLoss >= 0;
+function StockHoldingCard({ stock, livePrice }) {
+    // Override with live price if available
+    const ltp = livePrice != null ? livePrice : stock.currentPrice;
+    const investment = +(stock.qty * stock.buyPrice).toFixed(2);
+    const currentValue = +(stock.qty * ltp).toFixed(2);
+    const profitLoss = +(currentValue - investment).toFixed(2);
+    const profitPct = +((profitLoss / investment) * 100).toFixed(2);
+    const isProfit = profitLoss >= 0;
     const plColor = isProfit ? PROFIT_COLOR : LOSS_COLOR;
+    const isLive = livePrice != null;
 
     return (
         <div
@@ -250,20 +263,22 @@ function StockHoldingCard({ stock }) {
                     </div>
 
                     <div style={{ minWidth: 110, flex: 1 }}>
-                        <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.38)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>LTP</div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f2ff' }}>{inr(stock.currentPrice)}</div>
+                        <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.38)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            LTP {isLive && <span style={{ color: '#22d3a5', fontSize: '0.6rem', marginLeft: 4 }}>● LIVE</span>}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: isLive ? '#22d3a5' : '#f0f2ff' }}>{inr(ltp)}</div>
                     </div>
 
                     <div style={{ width: '1px', height: 40, background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
 
                     <div style={{ minWidth: 120, flex: 1 }}>
                         <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.38)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Invested</div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f2ff' }}>{inr(stock.investment)}</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f2ff' }}>{inr(investment)}</div>
                     </div>
 
                     <div style={{ minWidth: 120, flex: 1 }}>
                         <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.38)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Curr. Value</div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f2ff' }}>{inr(stock.currentValue)}</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f2ff' }}>{inr(currentValue)}</div>
                     </div>
 
                     <div style={{ width: '1px', height: 40, background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
@@ -271,9 +286,9 @@ function StockHoldingCard({ stock }) {
                     <div style={{ minWidth: 130, textAlign: 'right', flex: 1 }}>
                         <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.38)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>P&amp;L</div>
                         <div style={{ fontSize: '1rem', fontWeight: 800, color: plColor, fontFamily: 'Space Grotesk' }}>
-                            {stock.profitLoss >= 0 ? '+' : ''}{inr(stock.profitLoss)}
+                            {profitLoss >= 0 ? '+' : ''}{inr(profitLoss)}
                         </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: plColor, opacity: 0.85 }}>{pct(stock.profitPct)}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: plColor, opacity: 0.85 }}>{pct(profitPct)}</div>
                     </div>
 
                 </div>
@@ -281,7 +296,6 @@ function StockHoldingCard({ stock }) {
         </div>
     );
 }
-
 // ─── MutualFundCard ───────────────────────────────────────────────────────────
 
 function MutualFundCard({ fund }) {
@@ -667,19 +681,85 @@ function OverviewTab() {
     );
 }
 
-// ─── Main Portfolio Page ──────────────────────────────────────────────────────
-
 export default function Portfolio() {
     const [activeTab, setActiveTab] = useState('equity');
     const [search, setSearch] = useState('');
     const [showAnalytics, setShowAnalytics] = useState(false);
     const [analyticsMode, setAnalyticsMode] = useState('equity');
 
+    // ── Live price state ──
+    const [livePrices, setLivePrices] = useState({});
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [priceError, setPriceError] = useState(null);
+    const [lastRefreshed, setLastRefreshed] = useState(null);
+
+    // ── News state ──
+    const [news, setNews] = useState([]);
+    const [newsLoading, setNewsLoading] = useState(false);
+    const [newsError, setNewsError] = useState(null);
+
+    const [userStocks, setUserStocks] = useState([]);
+
+    // ── Fetch portfolio base ──
+    const loadPortfolio = useCallback(async () => {
+        try {
+            const stocks = await fetchUserPortfolio();
+            setUserStocks(stocks);
+        } catch (e) {
+            console.error("Error loading portfolio:", e);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadPortfolio();
+    }, [loadPortfolio]);
+
+    // ── Fetch live prices ──
+    const handleRefreshPrices = useCallback(async () => {
+        setIsRefreshing(true);
+        setPriceError(null);
+        try {
+            const prices = await fetchPortfolioLivePrices();
+            setLivePrices(prices);
+            setLastRefreshed(new Date());
+        } catch {
+            setPriceError('Unable to fetch stock prices. Please try again.');
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, []);
+
+    // ── Fetch news ──
+    const handleFetchNews = useCallback(async () => {
+        if (news.length > 0) return; // already loaded
+        setNewsLoading(true);
+        setNewsError(null);
+        try {
+            const articles = await fetchPortfolioNews();
+            setNews(articles);
+        } catch {
+            setNewsError('Unable to fetch news. Try again.');
+        } finally {
+            setNewsLoading(false);
+        }
+    }, [news.length]);
+
+    // ── Auto-refresh every 5 minutes ──
+    useEffect(() => {
+        handleRefreshPrices();
+        const interval = setInterval(handleRefreshPrices, 300_000);
+        return () => clearInterval(interval);
+    }, [handleRefreshPrices]);
+
+    // ── Load news when News tab is opened ──
+    useEffect(() => {
+        if (activeTab === 'news') handleFetchNews();
+    }, [activeTab, handleFetchNews]);
+
     const filteredStocks = useMemo(() =>
-        STOCKS.filter(s =>
-            s.symbol.toLowerCase().includes(search.toLowerCase()) ||
-            s.name.toLowerCase().includes(search.toLowerCase())
-        ), [search]);
+        userStocks.filter(s =>
+            s.symbol.toLowerCase().includes(search.toLowerCase())
+        ), [search, userStocks]);
 
     const filteredMFs = useMemo(() =>
         MFS.filter(m => m.name.toLowerCase().includes(search.toLowerCase())),
@@ -691,6 +771,7 @@ export default function Portfolio() {
         { key: 'overview', label: '📊 Overview' },
         { key: 'equity', label: '📈 Equity' },
         { key: 'mutualfunds', label: '🏦 Mutual Funds' },
+        { key: 'news', label: '📰 News' },
     ];
 
     // ── shared search bar ──
@@ -719,15 +800,58 @@ export default function Portfolio() {
     return (
         <div className="page-content">
 
-            {/* Page Title */}
-            <div style={{ marginBottom: '28px' }}>
-                <h1 style={{ fontFamily: 'Space Grotesk', fontSize: '1.8rem', fontWeight: 800, color: '#f0f2ff', marginBottom: 6 }}>
-                    Portfolio Dashboard
-                </h1>
-                <p style={{ fontSize: '0.88rem', color: 'rgba(255,255,255,0.35)' }}>
-                    Real-time insights and asset performance management
-                </p>
+            {/* Page Title + Refresh Button */}
+            <div style={{ marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                    <h1 style={{ fontFamily: 'Space Grotesk', fontSize: '1.8rem', fontWeight: 800, color: '#f0f2ff', marginBottom: 6 }}>
+                        Portfolio Dashboard
+                    </h1>
+                    <p style={{ fontSize: '0.88rem', color: 'rgba(255,255,255,0.35)' }}>
+                        Real-time insights and asset performance management
+                    </p>
+                </div>
+
+                {/* Refresh controls */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <button
+                        onClick={handleRefreshPrices}
+                        disabled={isRefreshing}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '10px 20px', borderRadius: 10, fontSize: '0.82rem',
+                            fontWeight: 700, cursor: isRefreshing ? 'not-allowed' : 'pointer',
+                            fontFamily: 'inherit', letterSpacing: '0.06em',
+                            background: isRefreshing ? 'rgba(99,102,241,0.1)' : 'linear-gradient(135deg, #6366f1, #a855f7)',
+                            color: isRefreshing ? 'rgba(255,255,255,0.4)' : '#fff',
+                            border: isRefreshing ? '1px solid rgba(99,102,241,0.2)' : 'none',
+                            boxShadow: isRefreshing ? 'none' : '0 0 18px rgba(99,102,241,0.35)',
+                            transition: 'all 0.2s',
+                            opacity: isRefreshing ? 0.7 : 1,
+                        }}
+                    >
+                        {isRefreshing ? (
+                            <>
+                                <span style={{
+                                    display: 'inline-block', width: 14, height: 14, borderRadius: '50%',
+                                    border: '2px solid rgba(255,255,255,0.2)', borderTopColor: '#818cf8',
+                                    animation: 'spin 0.7s linear infinite',
+                                }} />
+                                Refreshing…
+                            </>
+                        ) : '🔄 Refresh Prices'}
+                    </button>
+                    {lastRefreshed && !isRefreshing && (
+                        <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.28)' }}>
+                            Updated {lastRefreshed.toLocaleTimeString()}
+                        </span>
+                    )}
+                    {priceError && (
+                        <span style={{ fontSize: '0.7rem', color: '#f43f5e' }}>⚠️ {priceError}</span>
+                    )}
+                </div>
             </div>
+
+            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
             {/* Tab Bar */}
             <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: '28px' }}>
@@ -756,16 +880,14 @@ export default function Portfolio() {
                     <PortfolioSummaryCard onAnalyze={() => openAnalytics('equity')} mode="equity" />
                     <SearchBar placeholder="Search stocks by name or symbol…" />
                     <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', marginBottom: '12px' }}>
-                        Showing {filteredStocks.length} of {STOCKS.length} holdings
+                        Showing {filteredStocks.length} of {userStocks.length} holdings
                     </div>
                     {filteredStocks.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '60px 0', color: 'rgba(255,255,255,0.25)', fontSize: '1rem' }}>
-                            No holdings found matching "{search}"
+                            No holdings found matching &ldquo;{search}&rdquo;
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {filteredStocks.map(stock => <StockHoldingCard key={stock.symbol} stock={stock} />)}
-                        </div>
+                        <PortfolioTable stocks={filteredStocks} livePrices={livePrices} />
                     )}
                 </div>
             )}
@@ -778,6 +900,29 @@ export default function Portfolio() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {filteredMFs.map(mf => <MutualFundCard key={mf.name} fund={mf} />)}
                     </div>
+                </div>
+            )}
+
+            {/* ── NEWS TAB ── */}
+            {activeTab === 'news' && (
+                <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+                        <div>
+                            <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: '1.05rem', color: '#f0f2ff' }}>Latest News</div>
+                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>News for your holdings · sorted newest first</div>
+                        </div>
+                        <button
+                            onClick={() => { setNews([]); setTimeout(handleFetchNews, 100); }}
+                            disabled={newsLoading}
+                            style={{
+                                padding: '8px 16px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
+                                cursor: newsLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                                background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)',
+                                color: '#818cf8', transition: 'all 0.2s',
+                            }}
+                        >🔄 Reload News</button>
+                    </div>
+                    <NewsTab news={news} loading={newsLoading} error={newsError} />
                 </div>
             )}
 
